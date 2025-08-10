@@ -84,26 +84,59 @@ def show_main_page():
         st.error(f"Model loading error: {str(e)}")
         return
 
-    input_text = st.text_area("Paste news article text:", height=150)
+    # --------- NEW FUNCTIONALITY FROM appp.py ---------
+    # Session state for text input
+    if 'news_text' not in st.session_state:
+        st.session_state.news_text = ""
+    def update_text():
+        st.session_state.news_text = st.session_state.text_area_content
+
+    input_text = st.text_area(
+        "Paste news article text:",
+        height=150,
+        key="text_area_content",
+        value=st.session_state.news_text,
+        on_change=update_text
+    )
     input_url = st.text_input("Or enter article URL:")
 
+    # Calculate and display word count from session state
+    word_count = len(st.session_state.news_text.split()) if st.session_state.news_text else 0
+    word_count_display = st.empty()
+    word_count_display.caption(f"Word count: {word_count}")
+
+    # Show warning if word count is below minimum for text
+    if st.session_state.news_text and word_count < MIN_TEXT_LENGTH:
+        st.warning(f"Minimum {MIN_TEXT_LENGTH} words required (currently {word_count})")
+    else:
+        st.empty()  # Clear any existing warnings if conditions aren't met
+
     if st.button("Analyze Content"):
-        if input_text.strip():
-            content = input_text
+        # Don't allow both fields at once
+        if st.session_state.news_text.strip() and input_url.strip():
+            st.warning("Please provide either text OR URL, not both")
+            return
+
+        if st.session_state.news_text.strip():
+            content = st.session_state.news_text
+            word_count = len(content.split())
+            if word_count < MIN_TEXT_LENGTH:
+                # Already shown warning above, just return
+                return
         elif input_url.strip():
             try:
                 response = requests.get(input_url, timeout=10)
                 soup = BeautifulSoup(response.content, 'html.parser')
                 content = ' '.join([p.get_text() for p in soup.find_all('p')])
+                word_count = len(content.split())
+                if word_count < MIN_TEXT_LENGTH:
+                    st.warning(f"Minimum {MIN_TEXT_LENGTH} words required (currently {word_count})")
+                    return
             except Exception as e:
                 st.error(f"URL processing error: {str(e)}")
                 return
         else:
-            st.warning("Please provide text or URL")
-            return
-
-        if len(content.split()) < MIN_TEXT_LENGTH:
-            st.warning(f"Minimum {MIN_TEXT_LENGTH} words required")
+            st.warning("Please provide either text or URL")
             return
 
         try:
@@ -114,6 +147,7 @@ def show_main_page():
             st.success(f"**Analysis Result**: {result} (Confidence: {proba:.1f}%)")
         except Exception as e:
             st.error(f"Analysis failed: {str(e)}")
+    # ---------------------------------------------------
 
 def show_login_page():
     st.title("User Login")
